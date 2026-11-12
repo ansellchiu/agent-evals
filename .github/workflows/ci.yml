@@ -1,0 +1,40 @@
+# Hand-written: the installed no-mistakes generator (v1.84.0) is Go-specific
+# (it hardcodes actions/setup-go keyed to go.mod), and this repository has no go.mod.
+# Replace this file with `no-mistakes ci-workflow` output once no-mistakes is upgraded.
+# The check below mirrors commands.lint in .no-mistakes.yaml; keep the two in step.
+name: CI
+
+on:
+  push:
+    branches: ['main']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Docs check
+        run: |
+          set -eu
+          files=$(git ls-files '*.md')
+          echo "== whitespace: no trailing spaces, no tabs, final newline"
+          if grep -nE '[[:space:]]+$' $files; then echo "trailing whitespace"; exit 1; fi
+          for f in $files; do
+            [ -z "$(tail -c1 "$f")" ] || { echo "$f: missing final newline"; exit 1; }
+          done
+          echo "== fences: every file closes its code fences"
+          for f in $files; do
+            n=$(grep -cE '^[[:space:]]*(```|~~~)' "$f" || true)
+            [ $((n % 2)) -eq 0 ] || { echo "$f: unbalanced code fence"; exit 1; }
+          done
+          echo "== links: markdown link check (read-only)"
+          for f in $files; do npx --yes markdown-link-check@3.12.2 -q "$f"; done
